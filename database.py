@@ -8,6 +8,7 @@ def get_connection():
 
 
 def init_db():
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -41,6 +42,7 @@ def init_db():
         status TEXT
     )
     """)
+
     # =========================
     # TEAMS
     # =========================
@@ -51,7 +53,8 @@ def init_db():
         team_type TEXT NOT NULL
     )
     """)
-        # =========================
+
+    # =========================
     # ACTIVE MEETING
     # =========================
     cur.execute("""
@@ -69,10 +72,87 @@ def init_db():
     (1, NULL, 'Administrator')
     """)
 
+    # =========================
+    # ATHLETES
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS athletes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER,
+        full_name TEXT NOT NULL,
+        gender TEXT NOT NULL,
+        age_group TEXT NOT NULL,
+        team_id INTEGER
+    )
+    """)
+
+    # =========================
+    # EVENTS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER,
+        event_name TEXT NOT NULL,
+        event_type TEXT NOT NULL
+    )
+    """)
+
+    # =========================
+    # EVENT ENTRIES
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS event_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER,
+        event_id INTEGER,
+        athlete_id INTEGER
+    )
+    """)
+
+    # =========================
+    # HEATS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS heats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER,
+        event_id INTEGER,
+        heat_number INTEGER
+    )
+    """)
+
+    # =========================
+    # HEAT ENTRIES
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS heat_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        heat_id INTEGER,
+        athlete_id INTEGER,
+        lane_number INTEGER
+    )
+    """)
+
+    # =========================
+    # RESULTS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        heat_id INTEGER,
+        athlete_id INTEGER,
+        performance TEXT,
+        position INTEGER
+    )
+    """)
+
     conn.commit()
     conn.close()
-    
+
+
 def set_active_meeting(meeting_id):
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -87,6 +167,7 @@ def set_active_meeting(meeting_id):
 
 
 def get_active_meeting():
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -104,6 +185,7 @@ def get_active_meeting():
 
 
 def set_user_mode(mode):
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -118,6 +200,7 @@ def set_user_mode(mode):
 
 
 def get_user_mode():
+
     conn = get_connection()
     cur = conn.cursor()
 

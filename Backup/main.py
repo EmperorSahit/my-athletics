@@ -18,7 +18,13 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import Qt
 
-from database import init_db
+from database import (
+    init_db,
+    set_active_meeting,
+    get_active_meeting,
+    set_user_mode,
+    get_user_mode
+)
 
 DB_NAME = "my_athletics.db"
 
@@ -100,9 +106,13 @@ class LoadMeetingScreen(QWidget):
         refresh_button = QPushButton("Refresh")
         refresh_button.clicked.connect(self.load_meetings)
 
+        activate_button = QPushButton("Set Active Meeting")
+        activate_button.clicked.connect(self.activate_meeting)
+
         layout.addWidget(title)
         layout.addWidget(self.list_widget)
         layout.addWidget(refresh_button)
+        layout.addWidget(activate_button)
 
         self.setLayout(layout)
 
@@ -129,6 +139,29 @@ class LoadMeetingScreen(QWidget):
             self.list_widget.addItem(
                 f"{meeting_id} - {name}"
             )
+    def activate_meeting(self):
+
+        item = self.list_widget.currentItem()
+
+        if not item:
+            QMessageBox.warning(
+                self,
+                "Select Meeting",
+                "Choose a meeting first."
+            )
+            return
+
+        meeting_id = int(
+            item.text().split(" - ")[0]
+        )
+
+        set_active_meeting(meeting_id)
+
+        QMessageBox.information(
+            self,
+            "Active Meeting",
+            f"Meeting {meeting_id} activated."
+        )
 
 # =========================
 # TEAM MANAGEMENT SCREEN
@@ -215,6 +248,54 @@ class TeamManagementScreen(QWidget):
             self.team_list.addItem(
                 f"{name} ({team_type})"
             )
+
+            # =========================
+# USER MODE SCREEN
+# =========================
+class UserModeScreen(QWidget):
+
+    def __init__(self):
+        super().__init__()
+
+        layout = QVBoxLayout()
+
+        title = QLabel("User Mode")
+
+        title.setAlignment(Qt.AlignCenter)
+
+        admin_button = QPushButton("Administrator")
+        operator_button = QPushButton("Meet Operator")
+
+        admin_button.clicked.connect(
+            lambda: self.set_mode("Administrator")
+        )
+
+        operator_button.clicked.connect(
+            lambda: self.set_mode("Meet Operator")
+        )
+
+        self.current_mode = QLabel()
+
+        layout.addWidget(title)
+        layout.addWidget(self.current_mode)
+        layout.addWidget(admin_button)
+        layout.addWidget(operator_button)
+
+        self.setLayout(layout)
+
+        self.refresh()
+
+    def set_mode(self, mode):
+
+        set_user_mode(mode)
+
+        self.refresh()
+
+    def refresh(self):
+
+        self.current_mode.setText(
+            f"Current Mode: {get_user_mode()}"
+        )
 # =========================
 # DASHBOARD SCREEN
 # =========================
@@ -242,6 +323,10 @@ class DashboardScreen(QWidget):
         teams_button = QPushButton("Teams")
         load_button = QPushButton("Load Meeting")
         teams_button = QPushButton("Teams")
+        mode_button = QPushButton("User Mode")
+        mode_button.clicked.connect(
+            lambda: self.stack.setCurrentIndex(4)
+        )
 
         load_button.clicked.connect(
             lambda: self.stack.setCurrentIndex(2)
@@ -255,6 +340,7 @@ class DashboardScreen(QWidget):
         layout.addWidget(subtitle)
         layout.addWidget(create_button)
         layout.addWidget(load_button)
+        layout.addWidget(mode_button)
         layout.addWidget(teams_button)
         layout.addStretch()
 
@@ -262,7 +348,7 @@ class DashboardScreen(QWidget):
 
 
 # =========================
-# MAIN WINDOW
+# MAIN WINDOWpy main.py
 # =========================
 class MainWindow(QMainWindow):
 
@@ -278,11 +364,13 @@ class MainWindow(QMainWindow):
         self.create_meeting = CreateMeetingScreen()
         self.load_meeting = LoadMeetingScreen()
         self.teams = TeamManagementScreen()
+        self.user_mode = UserModeScreen()
 
         self.stack.addWidget(self.dashboard)
         self.stack.addWidget(self.create_meeting)
         self.stack.addWidget(self.load_meeting)
         self.stack.addWidget(self.teams)
+        self.stack.addWidget(self.user_mode)
 
         container = QWidget()
 
