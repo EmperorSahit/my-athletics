@@ -94,7 +94,9 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         meeting_id INTEGER,
         event_name TEXT NOT NULL,
-        event_type TEXT NOT NULL
+        event_type TEXT NOT NULL,
+        gender TEXT,
+        age_group TEXT
     )
     """)
 
@@ -135,16 +137,29 @@ def init_db():
     """)
 
     # =========================
+    # FINALS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS finals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER,
+        athlete_id INTEGER,
+        seed_position INTEGER
+    )
+    """)
+
+    # =========================
     # RESULTS
     # =========================
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        heat_id INTEGER,
-        athlete_id INTEGER,
-        performance TEXT,
-        position INTEGER
-    )
+        CREATE TABLE IF NOT EXISTS results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            heat_id INTEGER,
+            athlete_id INTEGER,
+            performance TEXT,
+            position INTEGER,
+            UNIQUE(heat_id, athlete_id)
+        )
     """)
 
     conn.commit()

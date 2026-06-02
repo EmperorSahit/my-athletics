@@ -440,9 +440,20 @@ class EventScreen(QWidget):
         title.setAlignment(Qt.AlignCenter)
 
         self.event_name = QLineEdit()
-        self.event_name.setPlaceholderText(
-            "Event Name"
-        )
+        self.event_name.setPlaceholderText("Event Name")
+
+        self.gender_combo = QComboBox()
+        self.gender_combo.addItems([
+            "Male",
+            "Female"
+        ])
+
+        self.age_combo = QComboBox()
+        self.age_combo.addItems([
+            "U7","U8","U9","U10",
+            "U11","U12","U13","U14",
+            "U15","U16","U17","Open"
+        ])
 
         self.event_type = QComboBox()
         self.event_type.addItems([
@@ -451,22 +462,21 @@ class EventScreen(QWidget):
         ])
 
         save_button = QPushButton("Add Event")
-        save_button.clicked.connect(
-            self.save_event
-        )
+        save_button.clicked.connect(self.save_event)
 
         self.event_list = QListWidget()
 
-        refresh_button = QPushButton(
-            "Refresh Events"
-        )
-        refresh_button.clicked.connect(
-            self.load_events
-        )
+        refresh_button = QPushButton("Refresh Events")
+        refresh_button.clicked.connect(self.load_events)
 
         layout.addWidget(title)
         layout.addWidget(self.event_name)
+
+        layout.addWidget(self.gender_combo)
+        layout.addWidget(self.age_combo)
+
         layout.addWidget(self.event_type)
+
         layout.addWidget(save_button)
         layout.addWidget(self.event_list)
         layout.addWidget(refresh_button)
@@ -492,9 +502,9 @@ class EventScreen(QWidget):
         if not name:
             return
 
-        event_type = (
-            self.event_type.currentText()
-        )
+        event_type = self.event_type.currentText()
+        gender = self.gender_combo.currentText()
+        age_group = self.age_combo.currentText()
 
         conn = sqlite3.connect(DB_NAME)
         cur = conn.cursor()
@@ -504,25 +514,28 @@ class EventScreen(QWidget):
         (
             meeting_id,
             event_name,
-            event_type
+            event_type,
+            gender,
+            age_group
         )
-        VALUES (?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
         """, (
             meeting_id,
             name,
-            event_type
+            event_type,
+            gender,
+            age_group
         ))
 
         conn.commit()
         conn.close()
 
         self.event_name.clear()
-
         self.load_events()
-
+    
     def load_events(self):
 
-        self.event_list.clear()
+        self.event_combo.clear()
 
         meeting_id = get_active_meeting()
 
@@ -533,21 +546,21 @@ class EventScreen(QWidget):
         cur = conn.cursor()
 
         cur.execute("""
-        SELECT event_name,
-               event_type
-        FROM events
+        for event_id, name, gender, age_group in rows:
+            self.event_combo.addItem(
+                f"{name} ({gender} {age_group})",
+                event_id
+            )
         WHERE meeting_id = ?
         ORDER BY event_name
         """, (meeting_id,))
 
         rows = cur.fetchall()
-
         conn.close()
 
-        for name, event_type in rows:
-            self.event_list.addItem(
-                f"{name} | {event_type}"
-            )
+        for event_id, name, gender, age_group in rows:
+            display = f"{name} ({gender} {age_group})"
+            self.event_combo.addItem(display, event_id)            
 
 # =========================
 # EVENT ENTRY SCREEN
@@ -601,6 +614,7 @@ class EventEntryScreen(QWidget):
         self.load_events()
         self.load_athletes()
         self.load_entries()
+        self.event_combo.currentIndexChanged.connect(self.filter_athletes_by_event)
 
     def load_heats(self):
 
@@ -616,10 +630,12 @@ class EventEntryScreen(QWidget):
             return
 
         cur.execute("""
-            SELECT id, heat_number
-            FROM heats
-            WHERE meeting_id = ? AND event_id = ?
-            ORDER BY heat_number
+            SELECT a.id
+            FROM event_entries ee
+            JOIN athletes a ON ee.athlete_id = a.id
+            WHERE ee.meeting_id = ?
+            AND ee.event_id = ?
+            ORDER BY a.full_name ASC
         """, (meeting_id, event_id))
 
         heats = cur.fetchall()
@@ -645,7 +661,7 @@ class EventEntryScreen(QWidget):
 
     def load_events(self):
 
-        self.event_combo.clear()
+        self.event_list.clear()
 
         meeting_id = get_active_meeting()
 
@@ -791,6 +807,7 @@ class EventEntryScreen(QWidget):
 
         athletes = [a[0] for a in athletes]
 
+        # First delete child rows
         cur.execute("""
             DELETE FROM heat_entries
             WHERE heat_id IN (
@@ -799,6 +816,7 @@ class EventEntryScreen(QWidget):
             )
         """, (meeting_id, event_id))
 
+        # Then delete parent rows
         cur.execute("""
             DELETE FROM heats
             WHERE meeting_id = ? AND event_id = ?
@@ -822,7 +840,8 @@ class EventEntryScreen(QWidget):
             heat_id = cur.lastrowid
 
             # Fill heat with up to 8 athletes
-            for lane in range(1, MAX_PER_HEAT + 1):
+            lane = 1
+            while lane <= MAX_PER_HEAT and index < len(athletes):
 
                 if index >= len(athletes):
                     break
@@ -836,6 +855,7 @@ class EventEntryScreen(QWidget):
                 """, (heat_id, athlete_id, lane))
 
                 index += 1
+                lane += 1
 
             heat_number += 1
 
@@ -853,7 +873,50 @@ class EventEntryScreen(QWidget):
     def refresh_screen(self):
         self.load_events()
         self.load_athletes()
-        self.load_entries()       
+        self.load_entries()   
+
+    def filter_athletes_by_event(self):
+
+        self.athlete_combo.clear()
+
+        meeting_id = get_active_meeting()
+        event_id = self.event_combo.currentData()
+
+        if not meeting_id or not event_id:
+            return
+
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        # Get event rules (gender + age group)
+        cur.execute("""
+            SELECT gender, age_group
+            FROM events
+            WHERE id = ?
+        """, (event_id,))
+
+        event = cur.fetchone()
+
+        if not event:
+            conn.close()
+            return
+
+        gender, age_group = event
+
+        # Filter athletes
+        cur.execute("""
+            SELECT id, full_name
+            FROM athletes
+            WHERE meeting_id = ?
+            AND gender = ?
+            AND age_group = ?
+        """, (meeting_id, gender, age_group))
+
+        rows = cur.fetchall()
+        conn.close()
+
+        for athlete_id, name in rows:
+            self.athlete_combo.addItem(name, athlete_id)    
 
 # =========================
 # RESULTS SCREEN
@@ -881,9 +944,9 @@ class ResultsScreen(QWidget):
         )
 
         self.table = QTableWidget()
-        self.table.setColumnCount(2)
+        self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(
-            ["Athlete", "Performance"]
+            ["Athlete", "Performance", "Position"]
         )
 
         layout.addWidget(title)
@@ -895,6 +958,15 @@ class ResultsScreen(QWidget):
         self.setLayout(layout)
 
         self.load_heats()
+
+        generate_finals_button = QPushButton(
+            "Generate Finalists"
+        )
+        generate_finals_button.clicked.connect(
+            self.generate_finalists
+        )
+
+        layout.addWidget(generate_finals_button)
 
     def load_heats(self):
 
@@ -956,7 +1028,13 @@ class ResultsScreen(QWidget):
         """, (heat_id,))
 
         athletes = cur.fetchall()
+        cur.execute("""
+            SELECT athlete_id, performance, position
+            FROM results
+            WHERE heat_id = ?
+        """, (heat_id,))
 
+        results = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
         conn.close()
 
         self.table.setRowCount(
@@ -983,11 +1061,11 @@ class ResultsScreen(QWidget):
                 item
             )
 
-            self.table.setItem(
-                row,
-                1,
-                QTableWidgetItem("")
-            )
+            perf, pos = results.get(athlete_id, ("", ""))
+
+            self.table.setItem(row, 1, QTableWidgetItem(str(perf)))
+            self.table.setItem(row, 2, QTableWidgetItem(str(pos)))
+
 
     def save_results(self):
 
@@ -1024,19 +1102,16 @@ class ResultsScreen(QWidget):
                     performance_item.text()
                 )
 
-            cur.execute("""
-            INSERT INTO results
-            (
-                heat_id,
-                athlete_id,
-                performance
-            )
-            VALUES (?, ?, ?)
-            """, (
-                heat_id,
-                athlete_id,
-                performance
-            ))
+                cur.execute("""
+                INSERT INTO results (heat_id, athlete_id, performance)
+                VALUES (?, ?, ?)
+                ON CONFLICT(heat_id, athlete_id)
+                DO UPDATE SET performance = excluded.performance
+                """, (
+                    heat_id,
+                    athlete_id,
+                    performance
+                ))
 
         conn.commit()
         conn.close()
@@ -1046,6 +1121,153 @@ class ResultsScreen(QWidget):
             "Saved",
             "Results saved successfully."
         )
+
+    def generate_finalists(self):
+
+        heat_id = self.heat_combo.currentData()
+
+        if not heat_id:
+            return
+
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        # Find event
+        cur.execute("""
+            SELECT event_id
+            FROM heats
+            WHERE id = ?
+        """, (heat_id,))
+
+        row = cur.fetchone()
+
+        if not row:
+            conn.close()
+            return
+
+        event_id = row[0]
+
+        # Determine Track or Field
+        cur.execute("""
+            SELECT event_type
+            FROM events
+            WHERE id = ?
+        """, (event_id,))
+
+        event_type = cur.fetchone()[0]
+
+        # Load all results for event
+        cur.execute("""
+            SELECT
+                r.athlete_id,
+                r.performance
+            FROM results r
+            JOIN heats h
+                ON r.heat_id = h.id
+            WHERE h.event_id = ?
+        """, (event_id,))
+
+        rows = cur.fetchall()
+
+        athletes = []
+
+        for athlete_id, performance in rows:
+
+            try:
+                value = float(performance)
+                athletes.append(
+                    (athlete_id, value)
+                )
+            except:
+                pass
+
+        if not athletes:
+            conn.close()
+            return
+
+        # Track = lower better
+        if event_type == "Track":
+            athletes.sort(key=lambda x: x[1])
+
+        # Field = higher better
+        else:
+            athletes.sort(
+                key=lambda x: x[1],
+                reverse=True
+            )
+
+        top8 = athletes[:8]
+
+        cur.execute("""
+            DELETE FROM finals
+            WHERE event_id = ?
+        """, (event_id,))
+
+        seed = 1
+
+        for athlete_id, _ in top8:
+
+            cur.execute("""
+                INSERT INTO finals
+                (
+                    event_id,
+                    athlete_id,
+                    seed_position
+                )
+                VALUES (?, ?, ?)
+            """, (
+                event_id,
+                athlete_id,
+                seed
+            ))
+
+            seed += 1
+
+        conn.commit()
+        conn.close()
+
+        QMessageBox.information(
+        self,
+        "Finalists Generated",
+        f"{len(top8)} finalists created."
+    )
+
+    def calculate_positions(self, heat_id):
+
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT athlete_id, performance
+            FROM results
+            WHERE heat_id = ?
+        """, (heat_id,))
+
+        rows = cur.fetchall()
+
+        # Filter valid numeric performances
+        cleaned = []
+
+        for athlete_id, perf in rows:
+            try:
+                value = float(perf)
+                cleaned.append((athlete_id, value))
+            except:
+                continue
+
+        # Sort (lower = faster)
+        cleaned.sort(key=lambda x: x[1])
+
+        # Assign positions
+        for i, (athlete_id, _) in enumerate(cleaned, start=1):
+            cur.execute("""
+                UPDATE results
+                SET position = ?
+                WHERE heat_id = ? AND athlete_id = ?
+            """, (i, heat_id, athlete_id))
+
+        conn.commit()
+        conn.close()
 
 # =========================
 # USER MODE SCREEN
