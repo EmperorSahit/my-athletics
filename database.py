@@ -49,10 +49,28 @@ def init_db():
     cur.execute("""
     CREATE TABLE IF NOT EXISTS teams (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER,
         name TEXT NOT NULL,
         team_type TEXT NOT NULL
     )
     """)
+
+    # Add meeting_id to older databases
+    cur.execute("""
+    PRAGMA table_info(teams)
+    """)
+
+    team_columns = [
+        row[1]
+        for row in cur.fetchall()
+    ]
+
+    if "meeting_id" not in team_columns:
+
+        cur.execute("""
+        ALTER TABLE teams
+        ADD COLUMN meeting_id INTEGER
+        """)
 
     # =========================
     # ACTIVE MEETING
@@ -82,9 +100,27 @@ def init_db():
         full_name TEXT NOT NULL,
         gender TEXT NOT NULL,
         age_group TEXT NOT NULL,
-        team_id INTEGER
+        team_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'Active'
     )
     """)
+
+    # Add status to older databases
+    cur.execute("""
+    PRAGMA table_info(athletes)
+    """)
+
+    athlete_columns = [
+        row[1]
+        for row in cur.fetchall()
+    ]
+
+    if "status" not in athlete_columns:
+
+        cur.execute("""
+        ALTER TABLE athletes
+        ADD COLUMN status TEXT NOT NULL DEFAULT 'Active'
+        """)
 
     # =========================
     # EVENTS
@@ -108,10 +144,32 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         meeting_id INTEGER,
         event_id INTEGER,
-        athlete_id INTEGER
+        athlete_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'Active',
+        UNIQUE(event_id, athlete_id)
     )
     """)
 
+    # =========================
+    # EVENT ENTRY STATUS MIGRATION
+    # =========================
+    cur.execute("""
+    PRAGMA table_info(event_entries)
+    """)
+
+    event_entry_columns = [
+        row[1]
+        for row in cur.fetchall()
+    ]
+
+    if "status" not in event_entry_columns:
+
+        cur.execute("""
+        ALTER TABLE event_entries
+        ADD COLUMN status TEXT
+        NOT NULL DEFAULT 'Active'
+        """)
+        
     # =========================
     # HEATS
     # =========================
@@ -145,6 +203,68 @@ def init_db():
         event_id INTEGER,
         athlete_id INTEGER,
         seed_position INTEGER
+    )
+    """)
+    # =========================
+    # FINAL RESULTS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS final_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER,
+        athlete_id INTEGER,
+        lane_number INTEGER,
+        performance TEXT,
+        position INTEGER,
+        UNIQUE(event_id, athlete_id)
+    )
+    """)
+
+    # =========================
+    # FIELD ATTEMPTS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS field_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER NOT NULL,
+        event_id INTEGER NOT NULL,
+        athlete_id INTEGER NOT NULL,
+        attempt_number INTEGER NOT NULL,
+        performance TEXT,
+        UNIQUE(
+            event_id,
+            athlete_id,
+            attempt_number
+        )
+    )
+    """)
+
+    # =========================
+    # POINTS CONFIGURATION
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS points_config (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER NOT NULL,
+        position INTEGER NOT NULL,
+        points REAL NOT NULL,
+        UNIQUE(meeting_id, position)
+    )
+    """)
+
+    # =========================
+    # AWARDED POINTS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS awarded_points (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER NOT NULL,
+        event_id INTEGER NOT NULL,
+        athlete_id INTEGER NOT NULL,
+        team_id INTEGER,
+        position INTEGER NOT NULL,
+        points REAL NOT NULL,
+        UNIQUE(event_id, athlete_id)
     )
     """)
 
