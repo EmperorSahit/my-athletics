@@ -122,6 +122,48 @@ def init_db():
         ADD COLUMN status TEXT NOT NULL DEFAULT 'Active'
         """)
 
+        # =========================
+    # ATHLETE IMPORT FIELDS
+    # SAFE DATABASE MIGRATION
+    # =========================
+
+    cur.execute("""
+    PRAGMA table_info(athletes)
+    """)
+
+    athlete_columns = {
+        row[1]
+        for row in cur.fetchall()
+    }
+
+    if "entry_number" not in athlete_columns:
+
+        cur.execute("""
+        ALTER TABLE athletes
+        ADD COLUMN entry_number TEXT
+        """)
+
+    if "first_name" not in athlete_columns:
+
+        cur.execute("""
+        ALTER TABLE athletes
+        ADD COLUMN first_name TEXT
+        """)
+
+    if "surname" not in athlete_columns:
+
+        cur.execute("""
+        ALTER TABLE athletes
+        ADD COLUMN surname TEXT
+        """)
+
+    if "date_of_birth" not in athlete_columns:
+
+        cur.execute("""
+        ALTER TABLE athletes
+        ADD COLUMN date_of_birth TEXT
+        """)
+
     # =========================
     # EVENTS
     # =========================
@@ -135,6 +177,29 @@ def init_db():
         age_group TEXT
     )
     """)
+
+        # =========================
+    # EVENT COMPETITION FORMAT
+    # SAFE DATABASE MIGRATION
+    # =========================
+
+    cur.execute("""
+    PRAGMA table_info(events)
+    """)
+
+    event_columns = {
+        row[1]
+        for row in cur.fetchall()
+    }
+
+    if "competition_format" not in event_columns:
+
+        cur.execute("""
+        ALTER TABLE events
+        ADD COLUMN competition_format
+        TEXT NOT NULL
+        DEFAULT 'Timed Finals'
+        """)
 
     # =========================
     # EVENT ENTRIES
@@ -234,6 +299,42 @@ def init_db():
         UNIQUE(
             event_id,
             athlete_id,
+            attempt_number
+        )
+    )
+    """)
+
+        # =========================
+    # HIGH JUMP HEIGHTS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS high_jump_heights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER NOT NULL,
+        event_id INTEGER NOT NULL,
+        height_order INTEGER NOT NULL,
+        height REAL NOT NULL,
+        UNIQUE(event_id, height_order),
+        UNIQUE(event_id, height)
+    )
+    """)
+
+    # =========================
+    # HIGH JUMP ATTEMPTS
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS high_jump_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER NOT NULL,
+        event_id INTEGER NOT NULL,
+        athlete_id INTEGER NOT NULL,
+        height_id INTEGER NOT NULL,
+        attempt_number INTEGER NOT NULL,
+        result TEXT NOT NULL,
+        UNIQUE(
+            event_id,
+            athlete_id,
+            height_id,
             attempt_number
         )
     )
