@@ -1,6 +1,32 @@
+import os
 import sqlite3
 
-DB_NAME = "my_athletics.db"
+
+# =========================
+# ATHLETIDESK DATABASE
+# =========================
+DB_NAME = "AthletiDesk.db"
+LEGACY_DB_NAME = "my_athletics.db"
+
+
+def migrate_database_filename():
+    """
+    Safely rename the legacy database on first launch.
+
+    If AthletiDesk.db already exists it is never overwritten.
+    The old database is only renamed when it is the sole
+    database present, preserving all existing meetings/data.
+    """
+
+    if (
+        not os.path.exists(DB_NAME)
+        and os.path.exists(LEGACY_DB_NAME)
+    ):
+        os.replace(LEGACY_DB_NAME, DB_NAME)
+
+
+# Perform the one-time filename migration before any connection.
+migrate_database_filename()
 
 
 def get_connection():
@@ -27,7 +53,14 @@ def init_db():
     INSERT OR IGNORE INTO settings
     (id, app_name, version)
     VALUES
-    (1, 'My Athletics', '1.0')
+    (1, 'AthletiDesk', '1.0')
+    """)
+
+    # Upgrade the branding stored by older databases.
+    cur.execute("""
+    UPDATE settings
+    SET app_name = 'AthletiDesk'
+    WHERE id = 1
     """)
 
     # =========================
@@ -39,9 +72,36 @@ def init_db():
         name TEXT NOT NULL,
         date TEXT,
         team_mode TEXT,
-        status TEXT
+        status TEXT,
+        host_name TEXT,
+        host_logo BLOB
     )
     """)
+
+    # =========================
+    # MEETING HOST BRANDING
+    # SAFE DATABASE MIGRATION
+    # =========================
+    cur.execute("""
+    PRAGMA table_info(meetings)
+    """)
+
+    meeting_columns = {
+        row[1]
+        for row in cur.fetchall()
+    }
+
+    if "host_name" not in meeting_columns:
+        cur.execute("""
+        ALTER TABLE meetings
+        ADD COLUMN host_name TEXT
+        """)
+
+    if "host_logo" not in meeting_columns:
+        cur.execute("""
+        ALTER TABLE meetings
+        ADD COLUMN host_logo BLOB
+        """)
 
     # =========================
     # TEAMS
